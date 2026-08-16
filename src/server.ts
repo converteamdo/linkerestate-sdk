@@ -1,12 +1,4 @@
-/**
- * Server surface: lead submission.
- *
- * Separate from `@linkerestate/sdk/client` on purpose. The key it takes is a
- * `campaign_leads` key, which authorizes writing leads into a campaign — a
- * bundler must never be able to reach it from a browser entry point, and a
- * separate module is the only way to guarantee that structurally rather than
- * by convention.
- */
+/** Lead submission. Server-side only. */
 
 import { normalizeBaseUrl, request, type BaseConfig } from "./core.js"
 
@@ -17,10 +9,7 @@ export interface LeadsConfig extends BaseConfig {
   campaignId: string
   /** A `campaign_leads` key. Server-only — never ship it to a client bundle. */
   apiKey: string
-  /**
-   * `webhook_key` of the campaign source. Identifies which form the lead came
-   * from; it does not authorize the request.
-   */
+  /** Campaign source `webhook_key`, identifying which form the lead came from. */
   webhookKey: string
 }
 

@@ -8,10 +8,9 @@ npm i @linkerestate/sdk      # or: pnpm add / yarn add / bun add
 
 Zero runtime dependencies. ESM only, Node 18+ and any modern browser.
 
-## Three entry points, on purpose
+## Entry points
 
-Each surface authenticates with its own key, and they are separate modules so a
-bundler cannot pull a server credential into a browser build by accident.
+Each surface has its own module and its own key scope.
 
 | Import | Key scope | Runs in |
 | --- | --- | --- |
@@ -31,7 +30,7 @@ hrefs your page rendered.
 import { createRoundRobinClient } from "@linkerestate/sdk/client"
 
 const rr = createRoundRobinClient({
-  campaignId: "e7a19592-9dd7-4773-b4f2-3cf30508c5bf",
+  campaignId: "00000000-0000-0000-0000-000000000000",
   apiKey: "wak_rr_…",          // safe to ship to the browser
   source: "…",                 // optional: campaign source webhook_key, for attribution
 })
@@ -52,7 +51,7 @@ client-side navigation — each element is only bound once.
 import { createLeadsClient } from "@linkerestate/sdk/server"
 
 const leads = createLeadsClient({
-  campaignId: "e7a19592-…",
+  campaignId: "00000000-0000-0000-0000-000000000000",
   apiKey: process.env.LINKERESTATE_LEADS_KEY!,   // never expose this
   webhookKey: process.env.LINKERESTATE_WEBHOOK_KEY!,
 })
@@ -77,9 +76,8 @@ const { data, pagination } = await catalog.properties({ page: 1, listing_type: "
 const agents = await catalog.agents()
 ```
 
-Property and agent objects are returned as-is from the API. The platform appends
-fields to these payloads regularly, so they are typed as open records rather than
-a mirror that would go stale between releases.
+Property and agent objects are returned as-is from the API and typed as open
+records.
 
 ## Errors
 
@@ -101,9 +99,8 @@ try {
 
 ## Pointing at another environment
 
-`baseUrl` overrides the API root. It exists for staging and self-hosted
-installs — leave it unset in production so a platform domain change never
-requires redeploying your site.
+`baseUrl` overrides the API root. Leave it unset unless you are pointing at a
+non-production environment.
 
 ```ts
 createCatalogClient({ apiKey, baseUrl: process.env.LINKERESTATE_API_URL })

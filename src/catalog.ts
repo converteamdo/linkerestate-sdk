@@ -1,14 +1,4 @@
-/**
- * Catalog surface: properties and agents.
- *
- * Server-only, like `./server`: it authenticates with an `api_v1` key, which is
- * a workspace-wide read credential and must never reach a browser bundle.
- *
- * Property and agent shapes are intentionally left open (`Record<string, unknown>`
- * plus the fields that are guaranteed). The platform adds columns to these
- * payloads regularly, and a hand-mirrored interface here would either go stale
- * or force a major release every time a field is appended.
- */
+/** Property and agent catalog. Server-side only. */
 
 import { normalizeBaseUrl, request, type BaseConfig } from "./core.js"
 

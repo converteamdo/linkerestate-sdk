@@ -1,11 +1,4 @@
-/**
- * Browser surface: agent rotation for WhatsApp / phone CTAs.
- *
- * The key this entry point takes is public by construction — it ends up in the
- * page source, and that is fine: it can only read the next agent and record a
- * click. Lead submission lives in `@linkerestate/sdk/server` precisely so its
- * credential can never be bundled into a browser build by accident.
- */
+/** Agent rotation for WhatsApp and phone CTAs. Runs in the browser. */
 
 import { normalizeBaseUrl, request, type BaseConfig } from "./core.js"
 
@@ -16,10 +9,7 @@ export interface RoundRobinConfig extends BaseConfig {
   campaignId: string
   /** A `campaign_rr` key. Public — it is meant to ship to the browser. */
   apiKey: string
-  /**
-   * `webhook_key` of the campaign source, forwarded as click attribution so a
-   * commit can be traced back to the form it came from. Not a credential.
-   */
+  /** Campaign source `webhook_key`, sent as click attribution. */
   source?: string
 }
 
@@ -31,7 +21,7 @@ export interface NextAgent {
 
 export type CtaChannel = "whatsapp" | "tel"
 
-/** Elements the commit handler binds to, matching the platform's own markup. */
+/** Elements the commit handler binds to. */
 const SELECTORS: Record<CtaChannel, string> = {
   whatsapp: '[id^="wa-btn"], [data-rr-link="whatsapp"]',
   tel: '[id^="tel-btn"], [data-rr-link="tel"]',
@@ -41,9 +31,8 @@ export interface RoundRobinClient {
   /** Reads the agent on turn without consuming the slot. */
   peek(): Promise<NextAgent | null>
   /**
-   * Binds click handlers that commit the assignment. Fire-and-forget via
-   * `sendBeacon` so navigation to WhatsApp is never delayed. Returns a cleanup
-   * function; safe to call repeatedly (handlers are attached once per element).
+   * Binds click handlers that commit the assignment without blocking
+   * navigation. Returns a cleanup function; each element is bound once.
    */
   attachCommitHandlers(root?: ParentNode): () => void
 }
@@ -68,8 +57,7 @@ export function createRoundRobinClient(config: RoundRobinConfig): RoundRobinClie
           timeoutMs: 4500,
         })
       } catch {
-        // A failed peek must never break the page: the CTAs keep their
-        // server-rendered fallback hrefs.
+        // Fail soft: the CTAs keep the hrefs the page rendered.
         return null
       }
     },

@@ -1,16 +1,9 @@
-/**
- * Shared plumbing for every surface of the Linkerestate API.
- *
- * The base URL is a package default, not consumer configuration. Sites embed it
- * at build time and there are many of them, so a host that each consumer spells
- * out itself turns any platform domain change into one broken deploy per site.
- * `baseUrl` stays as an escape hatch for staging and self-hosting, nothing else.
- */
+/** Shared request helpers for every surface of the Linkerestate API. */
 
 export const DEFAULT_BASE_URL = "https://app.linkerestate.com/api/v1"
 
 export interface BaseConfig {
-  /** Override the API root. Only for staging or a self-hosted platform. */
+  /** Override the API root. Leave unset to use the default. */
   baseUrl?: string
 }
 
@@ -41,10 +34,7 @@ export interface RequestOptions {
   signal?: AbortSignal
 }
 
-/**
- * One fetch wrapper for every call: builds the URL, applies the timeout and
- * turns a non-2xx into a typed error instead of a silent `undefined`.
- */
+/** Performs a request and throws `LinkerestateError` on any non-2xx response. */
 export async function request<T>(url: string, opts: RequestOptions = {}): Promise<T> {
   const { method = "GET", bearer, query, body, timeoutMs = 8000, signal } = opts
 
