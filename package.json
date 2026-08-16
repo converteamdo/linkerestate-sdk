@@ -29,7 +29,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "pnpm run typecheck && pnpm run build"
+    "prepublishOnly": "tsc --noEmit && tsup"
   },
   "keywords": [
     "linkerestate",
@@ -45,9 +45,12 @@
   "publishConfig": {
     "access": "public"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/converteamdo/linkerestate-sdk.git"
+  },
+  "homepage": "https://github.com/converteamdo/linkerestate-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/converteamdo/linkerestate-sdk/issues"
   }
 }
