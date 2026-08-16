@@ -106,7 +106,7 @@ installs — leave it unset in production so a platform domain change never
 requires redeploying your site.
 
 ```ts
-createCatalogClient({ apiKey, baseUrl: "https://staging.linkerestate.com/api/v1" })
+createCatalogClient({ apiKey, baseUrl: process.env.LINKERESTATE_API_URL })
 ```
 
 ## License

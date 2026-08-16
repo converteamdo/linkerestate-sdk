@@ -1,11 +1,10 @@
 /**
  * Shared plumbing for every surface of the Linkerestate API.
  *
- * The base URL is a package default, not consumer configuration. Sites embed
- * it at build time, and there are hundreds of them: when the platform moved
- * from app.oird.do to app.linkerestate.com, every consumer that had spelled the
- * host itself broke, and each one needed its own redeploy. `baseUrl` stays as
- * an escape hatch for staging and self-hosting, nothing else.
+ * The base URL is a package default, not consumer configuration. Sites embed it
+ * at build time and there are many of them, so a host that each consumer spells
+ * out itself turns any platform domain change into one broken deploy per site.
+ * `baseUrl` stays as an escape hatch for staging and self-hosting, nothing else.
  */
 
 export const DEFAULT_BASE_URL = "https://app.linkerestate.com/api/v1"
