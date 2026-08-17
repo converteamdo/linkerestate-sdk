@@ -13,6 +13,8 @@ export const DEFAULT_BASE_URL = "https://app.linkerestate.com/api/v1"
  * `signal` is the one exception, since the SDK owns the request timeout.
  *
  * Typed loosely on purpose: `next` is not part of the standard `RequestInit`.
+ * Give `headers` as a plain object — a `Headers` instance or an array of pairs
+ * survives the type but not the merge, and its entries would be dropped.
  */
 export type FetchOverrides = RequestInit & Record<string, unknown>
 

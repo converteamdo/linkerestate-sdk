@@ -106,6 +106,10 @@ if (ranked.meta.sort_fallback) {
 
 // One agent by UUID or username. Public URLs carry the username, never the id.
 const { data: agent } = await catalog.agent("maria-perez")
+
+// Append-only popularity event. Un-favouriting does not decrement, so there is
+// no counterpart call.
+await catalog.favorite(property.id, { visitorId })
 ```
 
 An agent whose profile stopped being public answers 404 exactly like one who

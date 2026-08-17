@@ -42,18 +42,49 @@ export interface AgentsMeta extends Meta {
 export type Property = { id: string } & Record<string, unknown>
 export type Agent = { id: string } & Record<string, unknown>
 
-/** Filters accepted by the properties endpoint. Comma-joined where plural. */
+/**
+ * Filters accepted by the properties endpoint. Arrays are comma-joined; the
+ * three flags are sent as `1` when true and omitted when false, which is how
+ * the API reads them.
+ *
+ * Location can be given by id or by name, and the two are independent filters
+ * rather than aliases — `city_id` matches the catalog id, `city` matches the
+ * stored name.
+ */
 export interface PropertyQuery {
   page?: number
+  /** Free-text search. */
+  search?: string
   listing_type?: string
   property_status?: string[]
   offer_types?: string[]
   property_type_id?: string[]
   property_type_key?: string[]
   city_id?: number[]
+  city?: string[]
   state_id?: number[]
+  province?: string[]
   sector_id?: number[]
+  sector?: string[]
+  amenities?: string[]
+  tags?: string[]
   organization_id?: string
+  furnishing?: string
+  floors?: number
+  min_price?: number
+  max_price?: number
+  min_rooms?: number
+  min_bathrooms?: number
+  min_parking?: number
+  featured?: boolean
+  confotur?: boolean
+  safe?: boolean
+  delivery_date_from?: string
+  delivery_date_to?: string
+  /** e.g. `"views"`, `"priority"`, `"price"`, `"name"`, `"favorites"`. */
+  sort_field?: string
+  /** Descending unless this is `"asc"`. */
+  sort_dir?: "asc" | "desc"
 }
 
 export interface AgentQuery {
@@ -83,13 +114,31 @@ export interface CatalogClient {
    * as "no agent", not as a failure.
    */
   agent(idOrUsername: string, options?: CallOptions): Promise<{ data: Agent }>
+  /**
+   * Records a favourite — an append-only popularity event that feeds the
+   * "most favourited" ordering. Un-favouriting does not decrement, so there is
+   * nothing to undo and no call to make for it.
+   *
+   * `visitorId` is a stable anonymous browser id, sent as `x-visitor-id`, and
+   * is what keeps one visitor from inflating the count.
+   */
+  favorite(uid: string, options?: CallOptions & { visitorId?: string }): Promise<void>
 }
 
 function toQuery(query: object = {}): Record<string, string | undefined> {
   const out: Record<string, string | undefined> = {}
   for (const [k, v] of Object.entries(query)) {
     if (v === undefined || v === null) continue
-    out[k] = Array.isArray(v) ? v.join(",") : String(v)
+    if (Array.isArray(v)) {
+      if (v.length === 0) continue
+      out[k] = v.join(",")
+    } else if (typeof v === "boolean") {
+      // The API reads these as the literal "1"; sending "false" would enable
+      // the filter rather than clear it.
+      if (v) out[k] = "1"
+    } else {
+      out[k] = String(v)
+    }
   }
   return out
 }
@@ -129,6 +178,18 @@ export function createCatalogClient(config: CatalogConfig): CatalogClient {
         `${base}/agents/${encodeURIComponent(idOrUsername)}`,
         { bearer: config.apiKey, fetchOptions: fetchOptions(options) }
       )
+    },
+    async favorite(uid: string, options) {
+      const merged = fetchOptions(options)
+      const visitor = options?.visitorId
+      await request<unknown>(`${base}/properties/${encodeURIComponent(uid)}/favorite`, {
+        method: "POST",
+        bearer: config.apiKey,
+        timeoutMs: 6000,
+        fetchOptions: visitor
+          ? { ...merged, headers: { ...merged?.headers, "x-visitor-id": visitor } }
+          : merged,
+      })
     },
   }
 }
