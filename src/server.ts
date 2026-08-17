@@ -14,6 +14,12 @@ export interface LeadsConfig extends BaseConfig {
 }
 
 export interface LeadPayload {
+  /**
+   * Agent the page already rendered, from `peekLeadForm()`. Unlike
+   * `sale_agent_id` this one spends that rotation turn, so the next visitor
+   * sees the following agent.
+   */
+  lead_form_agent_id?: string
   first_name?: string
   last_name?: string
   phone?: string
@@ -54,7 +60,7 @@ export function createLeadsClient(config: LeadsConfig): LeadsClient {
       if (!payload.first_name && !payload.last_name && !payload.phone && !payload.email) {
         throw new TypeError("A lead needs at least one of: first_name, last_name, phone, email")
       }
-      return request<LeadResult>(`${base}/rr/${config.campaignId}/leads`, {
+      return request<LeadResult>(`${base}/campaigns/${config.campaignId}/leads`, {
         method: "POST",
         bearer: config.apiKey,
         body: { webhook_key: config.webhookKey, ...payload },

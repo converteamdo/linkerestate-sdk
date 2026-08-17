@@ -23,6 +23,19 @@ export function normalizeBaseUrl(baseUrl?: string): string {
   return (baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "")
 }
 
+/** Wrapper every list endpoint returns. */
+export interface Meta {
+  page: number
+  page_size: number
+  total: number
+  total_pages: number
+}
+
+export interface Paginated<T, M extends Meta = Meta> {
+  data: T[]
+  meta: M
+}
+
 export interface RequestOptions {
   method?: "GET" | "POST"
   /** Sent as `Authorization: Bearer`. */

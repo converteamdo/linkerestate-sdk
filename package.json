@@ -1,6 +1,6 @@
 {
   "name": "@linkerestate/sdk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Official client for the Linkerestate API: agent rotation, lead capture and property catalog.",
   "license": "MIT",
   "type": "module",

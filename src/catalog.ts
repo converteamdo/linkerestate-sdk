@@ -1,6 +1,6 @@
 /** Property and agent catalog. Server-side only. */
 
-import { normalizeBaseUrl, request, type BaseConfig } from "./core.js"
+import { normalizeBaseUrl, request, type BaseConfig, type Meta, type Paginated } from "./core.js"
 
 export { LinkerestateError } from "./core.js"
 
@@ -9,16 +9,17 @@ export interface CatalogConfig extends BaseConfig {
   apiKey: string
 }
 
-export interface Pagination {
-  page: number
-  page_size: number
-  total: number
-  total_pages: number
-}
+export type { Meta, Paginated } from "./core.js"
 
-export interface Paginated<T> {
-  data: T[]
-  pagination: Pagination
+/** `/agents` adds a flag to the standard meta block. */
+export interface AgentsMeta extends Meta {
+  /**
+   * True when `sort: "sales"` was requested but the ranking query failed. The
+   * response is then in random order — deliberately not alphabetical, which
+   * would systematically favour agents whose name starts with "A". Read this
+   * before presenting the list as ranked.
+   */
+  sort_fallback: boolean
 }
 
 export type Property = { id: string } & Record<string, unknown>
@@ -38,9 +39,23 @@ export interface PropertyQuery {
   organization_id?: string
 }
 
+export interface AgentQuery {
+  page?: number
+  /** Free-text search over the agent's name. */
+  q?: string
+  /**
+   * `"sales"` orders by sales ranking instead of name. Amounts are never
+   * exposed — only the ordering. Note this path fetches every matching agent
+   * and paginates in memory, so it is heavier than the default order.
+   */
+  sort?: "sales"
+}
+
 export interface CatalogClient {
   properties(query?: PropertyQuery): Promise<Paginated<Property>>
-  agents(query?: { page?: number }): Promise<Paginated<Agent>>
+  /** One property by UUID, numeric public id, or slug. */
+  property(idOrSlug: string): Promise<{ data: Property }>
+  agents(query?: AgentQuery): Promise<Paginated<Agent, AgentsMeta>>
 }
 
 function toQuery(query: object = {}): Record<string, string | undefined> {
@@ -62,8 +77,14 @@ export function createCatalogClient(config: CatalogConfig): CatalogClient {
         query: toQuery(query),
       })
     },
+    property(idOrSlug: string) {
+      return request<{ data: Property }>(
+        `${base}/properties/${encodeURIComponent(idOrSlug)}`,
+        { bearer: config.apiKey }
+      )
+    },
     agents(query = {}) {
-      return request<Paginated<Agent>>(`${base}/agents`, {
+      return request<Paginated<Agent, AgentsMeta>>(`${base}/agents`, {
         bearer: config.apiKey,
         query: toQuery(query),
       })
