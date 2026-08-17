@@ -103,7 +103,14 @@ if (ranked.meta.sort_fallback) {
   // not alphabetical, which would always favour names starting with "A".
   // Don't present it as ranked.
 }
+
+// One agent by UUID or username. Public URLs carry the username, never the id.
+const { data: agent } = await catalog.agent("maria-perez")
 ```
+
+An agent whose profile stopped being public answers 404 exactly like one who
+never existed, so a lookup used as a fallback should read a `LinkerestateError`
+with `status: 404` as "no agent" rather than as a failure.
 
 Property and agent objects are returned as-is from the API and typed as open
 records.

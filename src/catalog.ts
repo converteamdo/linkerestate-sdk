@@ -56,6 +56,16 @@ export interface CatalogClient {
   /** One property by UUID, numeric public id, or slug. */
   property(idOrSlug: string): Promise<{ data: Property }>
   agents(query?: AgentQuery): Promise<Paginated<Agent, AgentsMeta>>
+  /**
+   * One agent by UUID or username. Public URLs carry the username, never the
+   * raw id, so both forms resolve here.
+   *
+   * Visibility can flip at any moment, so an agent who is no longer public
+   * answers 404 like one who never existed. Callers that use this as a
+   * fallback lookup should treat the `LinkerestateError` with `status: 404`
+   * as "no agent", not as a failure.
+   */
+  agent(idOrUsername: string): Promise<{ data: Agent }>
 }
 
 function toQuery(query: object = {}): Record<string, string | undefined> {
@@ -88,6 +98,12 @@ export function createCatalogClient(config: CatalogConfig): CatalogClient {
         bearer: config.apiKey,
         query: toQuery(query),
       })
+    },
+    agent(idOrUsername: string) {
+      return request<{ data: Agent }>(
+        `${base}/agents/${encodeURIComponent(idOrUsername)}`,
+        { bearer: config.apiKey }
+      )
     },
   }
 }
