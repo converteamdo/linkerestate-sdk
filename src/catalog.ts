@@ -1,8 +1,25 @@
 /** Property and agent catalog. Server-side only. */
 
-import { normalizeBaseUrl, request, type BaseConfig, type Meta, type Paginated } from "./core.js"
+import {
+  normalizeBaseUrl,
+  request,
+  type BaseConfig,
+  type FetchOverrides,
+  type Meta,
+  type Paginated,
+} from "./core.js"
 
 export { LinkerestateError } from "./core.js"
+export type { FetchOverrides } from "./core.js"
+
+/**
+ * Per-call caching policy. Merged over whatever `fetchOptions` the client was
+ * created with, so a client can set one default window and a single endpoint
+ * can still ask for another.
+ */
+export interface CallOptions {
+  fetchOptions?: FetchOverrides
+}
 
 export interface CatalogConfig extends BaseConfig {
   /** An `api_v1` key with read permission. Server-only. */
@@ -52,10 +69,10 @@ export interface AgentQuery {
 }
 
 export interface CatalogClient {
-  properties(query?: PropertyQuery): Promise<Paginated<Property>>
+  properties(query?: PropertyQuery, options?: CallOptions): Promise<Paginated<Property>>
   /** One property by UUID, numeric public id, or slug. */
-  property(idOrSlug: string): Promise<{ data: Property }>
-  agents(query?: AgentQuery): Promise<Paginated<Agent, AgentsMeta>>
+  property(idOrSlug: string, options?: CallOptions): Promise<{ data: Property }>
+  agents(query?: AgentQuery, options?: CallOptions): Promise<Paginated<Agent, AgentsMeta>>
   /**
    * One agent by UUID or username. Public URLs carry the username, never the
    * raw id, so both forms resolve here.
@@ -65,7 +82,7 @@ export interface CatalogClient {
    * fallback lookup should treat the `LinkerestateError` with `status: 404`
    * as "no agent", not as a failure.
    */
-  agent(idOrUsername: string): Promise<{ data: Agent }>
+  agent(idOrUsername: string, options?: CallOptions): Promise<{ data: Agent }>
 }
 
 function toQuery(query: object = {}): Record<string, string | undefined> {
@@ -80,29 +97,37 @@ function toQuery(query: object = {}): Record<string, string | undefined> {
 export function createCatalogClient(config: CatalogConfig): CatalogClient {
   const base = normalizeBaseUrl(config.baseUrl)
 
+  /** Per-call policy wins over the client-wide one. */
+  function fetchOptions(options?: CallOptions): FetchOverrides | undefined {
+    if (!config.fetchOptions && !options?.fetchOptions) return undefined
+    return { ...config.fetchOptions, ...options?.fetchOptions }
+  }
+
   return {
-    properties(query = {}) {
+    properties(query = {}, options) {
       return request<Paginated<Property>>(`${base}/properties`, {
         bearer: config.apiKey,
         query: toQuery(query),
+        fetchOptions: fetchOptions(options),
       })
     },
-    property(idOrSlug: string) {
+    property(idOrSlug: string, options) {
       return request<{ data: Property }>(
         `${base}/properties/${encodeURIComponent(idOrSlug)}`,
-        { bearer: config.apiKey }
+        { bearer: config.apiKey, fetchOptions: fetchOptions(options) }
       )
     },
-    agents(query = {}) {
+    agents(query = {}, options) {
       return request<Paginated<Agent, AgentsMeta>>(`${base}/agents`, {
         bearer: config.apiKey,
         query: toQuery(query),
+        fetchOptions: fetchOptions(options),
       })
     },
-    agent(idOrUsername: string) {
+    agent(idOrUsername: string, options) {
       return request<{ data: Agent }>(
         `${base}/agents/${encodeURIComponent(idOrUsername)}`,
-        { bearer: config.apiKey }
+        { bearer: config.apiKey, fetchOptions: fetchOptions(options) }
       )
     },
   }

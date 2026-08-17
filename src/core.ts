@@ -2,9 +2,25 @@
 
 export const DEFAULT_BASE_URL = "https://app.linkerestate.com/api/v1"
 
+/**
+ * Extra options merged into every `fetch` this client performs, so a host
+ * framework can apply its own caching policy.
+ *
+ * The SDK requests `cache: "no-store"` by default, which is right for a
+ * rotation but wrong for a catalog: under Next.js that opts every page out of
+ * static rendering. Passing `{ cache: "force-cache", next: { revalidate: 600 } }`
+ * puts the catalog back on ISR. Anything set here wins over the SDK's defaults;
+ * `signal` is the one exception, since the SDK owns the request timeout.
+ *
+ * Typed loosely on purpose: `next` is not part of the standard `RequestInit`.
+ */
+export type FetchOverrides = RequestInit & Record<string, unknown>
+
 export interface BaseConfig {
   /** Override the API root. Leave unset to use the default. */
   baseUrl?: string
+  /** Merged into every `fetch`; see {@link FetchOverrides}. */
+  fetchOptions?: FetchOverrides
 }
 
 export class LinkerestateError extends Error {
@@ -45,11 +61,13 @@ export interface RequestOptions {
   /** Milliseconds before the request is aborted. */
   timeoutMs?: number
   signal?: AbortSignal
+  /** Merged into the `fetch` call; see {@link FetchOverrides}. */
+  fetchOptions?: FetchOverrides
 }
 
 /** Performs a request and throws `LinkerestateError` on any non-2xx response. */
 export async function request<T>(url: string, opts: RequestOptions = {}): Promise<T> {
-  const { method = "GET", bearer, query, body, timeoutMs = 8000, signal } = opts
+  const { method = "GET", bearer, query, body, timeoutMs = 8000, signal, fetchOptions } = opts
 
   const target = new URL(url)
   for (const [k, v] of Object.entries(query ?? {})) {
@@ -62,9 +80,12 @@ export async function request<T>(url: string, opts: RequestOptions = {}): Promis
 
   const res = await fetch(target.toString(), {
     method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
+    ...fetchOptions,
+    // Headers and body describe the request itself, and the signal enforces the
+    // timeout — none of the three is the host framework's to override.
+    headers: { ...headers, ...(fetchOptions?.headers as Record<string, string> | undefined) },
+    body: body === undefined ? undefined : JSON.stringify(body),
     signal: signal ?? AbortSignal.timeout(timeoutMs),
   })
 

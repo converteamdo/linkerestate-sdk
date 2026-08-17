@@ -112,6 +112,28 @@ An agent whose profile stopped being public answers 404 exactly like one who
 never existed, so a lookup used as a fallback should read a `LinkerestateError`
 with `status: 404` as "no agent" rather than as a failure.
 
+### Caching
+
+Every request goes out `no-store` by default. That is right for a rotation and
+wrong for a catalog: under Next.js it opts the whole page out of static
+rendering. Pass `fetchOptions` to put the catalog back on ISR — client-wide, or
+per call when one endpoint wants a different window:
+
+```ts
+const catalog = createCatalogClient({
+  apiKey: process.env.LINKERESTATE_API_KEY!,
+  fetchOptions: { cache: "force-cache", next: { revalidate: 600 } },
+})
+
+// This one list tolerates a much longer window than the rest.
+const counts = await catalog.properties({ page: 1 }, {
+  fetchOptions: { next: { revalidate: 1800 } },
+})
+```
+
+`headers`, `body` and `signal` are not overridable — the first two describe the
+request and the third enforces the SDK's timeout.
+
 Property and agent objects are returned as-is from the API and typed as open
 records.
 
