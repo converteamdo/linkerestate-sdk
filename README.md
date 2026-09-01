@@ -105,6 +105,10 @@ const { data: property } = await catalog.property("torre-central")
 // Ranked by sales instead of by name. Amounts are never exposed — only the
 // ordering. Heavier than the default: this path pages in memory.
 const ranked = await catalog.agents({ sort: "sales" })
+// `meta.total_active` counts the workspace's ACTIVE advisors, published profile
+// or not — unlike `meta.total`, which counts what this response returns and so
+// only the public ones. Use it for a headcount; use `total` to paginate.
+
 if (ranked.meta.sort_fallback) {
   // The ranking query failed and the list came back shuffled — deliberately
   // not alphabetical, which would always favour names starting with "A".

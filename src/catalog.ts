@@ -37,6 +37,18 @@ export interface AgentsMeta extends Meta {
    * before presenting the list as ranked.
    */
   sort_fallback: boolean
+  /**
+   * Asesores activos del workspace, tengan o no perfil publico.
+   *
+   * `total` cuenta lo que la respuesta devuelve, y la lista es solo publica:
+   * usarlo como "cuantos asesores tiene la agencia" subestima el equipo,
+   * contando unicamente a quienes marcaron su perfil. Para un contador de
+   * portada, este es el numero.
+   *
+   * No lo afectan `q` ni la paginacion. Opcional: una API anterior a este
+   * campo no lo envia.
+   */
+  total_active?: number
 }
 
 export type Property = { id: string } & Record<string, unknown>
