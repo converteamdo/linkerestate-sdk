@@ -44,7 +44,7 @@ export type Agent = { id: string } & Record<string, unknown>
 
 /**
  * Filters accepted by the properties endpoint. Arrays are comma-joined; the
- * three flags are sent as `1` when true and omitted when false, which is how
+ * boolean flags are sent as `1` when true and omitted when false, which is how
  * the API reads them.
  *
  * Location can be given by id or by name, and the two are independent filters
@@ -53,6 +53,14 @@ export type Agent = { id: string } & Record<string, unknown>
  */
 export interface PropertyQuery {
   page?: number
+  /**
+   * Rows per page, capped server-side at 100. Omit it to get the endpoint's own
+   * default of 10 — the size every consumer written before this existed relies
+   * on. Ask for it when you need the whole filtered set: walking a large
+   * catalogue ten rows at a time is many requests where one or two would do,
+   * and each of them is spent against the surface's rate-limit budget.
+   */
+  page_size?: number
   /** Free-text search. */
   search?: string
   listing_type?: string
@@ -78,6 +86,8 @@ export interface PropertyQuery {
   min_parking?: number
   featured?: boolean
   confotur?: boolean
+  /** "Bono Primera Vivienda" — sent as `first_home_bonus=1`. */
+  first_home_bonus?: boolean
   safe?: boolean
   delivery_date_from?: string
   delivery_date_to?: string
@@ -89,6 +99,8 @@ export interface PropertyQuery {
 
 export interface AgentQuery {
   page?: number
+  /** Rows per page, capped server-side at 100. Omit for the endpoint's default of 25. */
+  page_size?: number
   /** Free-text search over the agent's name. */
   q?: string
   /**

@@ -92,6 +92,13 @@ const catalog = createCatalogClient({ apiKey: process.env.LINKERESTATE_API_KEY! 
 
 const { data, meta } = await catalog.properties({ page: 1, listing_type: "sale" })
 
+// `page_size` is honoured up to 100 and reported back in `meta.page_size`. Omit
+// it for the endpoint's own default of 10 (25 for agents). Ask for it when you
+// need the whole filtered set: walking a large catalogue ten rows at a time is
+// many requests where one or two would do, and every one of them is spent
+// against this surface's rate-limit budget.
+const wide = await catalog.properties({ page: 1, page_size: 100 })
+
 // One property by UUID, numeric public id, or slug
 const { data: property } = await catalog.property("torre-central")
 
