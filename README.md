@@ -173,7 +173,12 @@ try {
 ## Pointing at another environment
 
 `baseUrl` overrides the API root. Leave it unset unless you are pointing at a
-non-production environment.
+non-production environment. The default is
+`https://api.linkerestate.com/functions/v1/public-api/v1`; staging is
+`https://bijrjgviuwdusrqelbtw.supabase.co/functions/v1/public-api/v1`.
+
+Versions before 1.5.0 default to `https://app.linkerestate.com/api/v1`, which keeps
+working only until the app host's temporary rewrite is removed — upgrade before then.
 
 ```ts
 createCatalogClient({ apiKey, baseUrl: process.env.LINKERESTATE_API_URL })

@@ -1,6 +1,13 @@
 /** Shared request helpers for every surface of the Linkerestate API. */
 
-export const DEFAULT_BASE_URL = "https://app.linkerestate.com/api/v1"
+/**
+ * The API root: the `public-api` Edge Function on Linkerestate's API domain. Every surface builds
+ * `{base}/campaigns/{id}/…`, `{base}/properties`, `{base}/agents` on it.
+ *
+ * Until 1.5.0 this was `https://app.linkerestate.com/api/v1`, the retired Next.js app. That path
+ * still answers through a TEMPORARY rewrite on the app host, with a cutoff date — upgrade before it.
+ */
+export const DEFAULT_BASE_URL = "https://api.linkerestate.com/functions/v1/public-api/v1"
 
 /**
  * Extra options merged into every `fetch` this client performs, so a host
