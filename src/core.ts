@@ -32,7 +32,18 @@ export interface BaseConfig {
   fetchOptions?: FetchOverrides
 }
 
+/**
+ * Thrown on every non-2xx answer. `status` is the HTTP status and `body` the parsed answer (JSON
+ * when it parses, the raw text otherwise).
+ */
 export class LinkerestateError extends Error {
+  /**
+   * The machine-readable reason, when the answer carries one: `body.code` if `body` is an object
+   * with a string `code` (e.g. `"invalid_code"`, `"phone_verification_invalid"`). `undefined` for
+   * answers that only carry `error`. Branch on this, never on `message`, which is for humans.
+   */
+  readonly code?: string
+
   constructor(
     message: string,
     readonly status: number,
@@ -40,6 +51,14 @@ export class LinkerestateError extends Error {
   ) {
     super(message)
     this.name = "LinkerestateError"
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      "code" in body &&
+      typeof (body as { code: unknown }).code === "string"
+    ) {
+      this.code = (body as { code: string }).code
+    }
   }
 }
 

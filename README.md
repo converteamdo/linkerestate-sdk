@@ -83,6 +83,186 @@ const { assigned_to } = await leads.submit({
 
 A lead needs at least one of `first_name`, `last_name`, `phone`, `email`.
 
+## Phone verification (WhatsApp code)
+
+Since 1.6.0. For workspaces that have the feature, a lead form can prove the
+visitor owns the WhatsApp number they typed before the lead is submitted: the
+platform sends a code through a WhatsApp authentication template from the
+workspace's own number, the visitor types it, and only then is the lead
+submitted. Same client, same `campaign_leads` key — the browser never talks to
+the platform, your server does.
+
+```ts
+leads.startPhoneVerification({ phone, language?: "es" | "en" })
+// → { required: false, reason }                                    submit directly
+// → { required: true, verification_id, expires_at, resend_available_at, code_length }
+
+leads.checkPhoneVerification(verificationId, code)
+// → { verified: true, verification_id }                            then submit with it
+
+leads.submit({ ...lead, phone_verification_id: verification_id })
+```
+
+### The fail-open rule — never lose a lead to this feature
+
+Submit the lead **directly, without verification**, when `startPhoneVerification`
+
+- answers `{ required: false }` — `reason` is `module_disabled`, `inactive`,
+  `not_configured` or `send_failed`; or
+- throws anything that is **not** a `LinkerestateError` with status 422 or 429 —
+  a network error, a timeout, a 5xx. `phoneVerificationFailsOpen(err)` answers
+  exactly this.
+
+Only a 422 (`no_whatsapp`, `invalid_phone`) or a 429 (`too_many_codes`) stops the
+form, because those are the visitor's to fix. `no_whatsapp` means the number has
+no WhatsApp: show it and do not submit.
+
+### Refusals
+
+Every refusal is a `LinkerestateError` whose `code` names it.
+`isPhoneVerificationError(err, code?)` narrows it and types `err.body`:
+
+| `code` | Status | From | Meaning |
+| --- | --- | --- | --- |
+| `no_whatsapp` | 422 | start | the number has no WhatsApp — do not submit |
+| `invalid_phone` | 422 | start | not E.164 |
+| `too_many_codes` | 429 | start | 30 s between sends, 5 per hour; `body.retry_after` (seconds) |
+| `invalid_code` | 422 | check | wrong code; `body.attempts_left` |
+| `expired` | 410 | check | the code's 10 minutes ran out — start again |
+| `too_many_attempts` | 429 | check | 5 wrong codes — start again |
+| `not_found` | 404 | check | unknown id, or another campaign's |
+| `phone_verification_invalid` | 422 | submit | the id is not a verified, unconsumed verification of this phone from the last 30 minutes |
+
+`phone_verification_id` must be submitted with the **same phone** that was
+verified (digits compared), and it is consumed by the lead it is submitted with.
+A resend is another `startPhoneVerification` call, after `resend_available_at`.
+If the resend does NOT pass your anti-bot check again (a Turnstile token is
+single-use), pass the previous id as `resendOf`: the API only honours a resend
+that continues a verification of the same campaign and phone from the last hour,
+and answers 404 `not_found` otherwise — so a made-up id cannot send your paid
+WhatsApp codes to arbitrary numbers. Send the visitor back to the form then.
+
+### Astro Action, end to end
+
+The form posts twice: once with the contact details (step 1), and — only if a
+code was sent — again with the code (step 2). The step-1 fields travel back with
+step 2, so the lead can be submitted from there.
+
+```ts
+// src/actions/index.ts
+import { ActionError, defineAction } from "astro:actions"
+import { z } from "astro:schema"
+import {
+  createLeadsClient,
+  isPhoneVerificationError,
+  phoneVerificationFailsOpen,
+  type LeadPayload,
+} from "@linkerestate/sdk/server"
+
+// process.env, read at RUNTIME: import.meta.env would be folded at build time.
+const leads = createLeadsClient({
+  campaignId: process.env.LINKERESTATE_CAMPAIGN_ID!,
+  apiKey: process.env.LINKERESTATE_LEADS_KEY!,
+  webhookKey: process.env.LINKERESTATE_WEBHOOK_KEY!,
+})
+
+const contact = {
+  first_name: z.string().min(1),
+  email: z.string().email().optional(),
+  phone: z.string().min(7),
+  lead_form_agent_id: z.string().optional(),
+}
+
+function payload(input: { first_name: string; email?: string; phone: string; lead_form_agent_id?: string }): LeadPayload {
+  return { ...input, source: "website", channel: "contact_form" }
+}
+
+export const server = {
+  // Step 1 — also the "resend code" button: it just starts again.
+  requestLead: defineAction({
+    accept: "form",
+    input: z.object({ ...contact, "cf-turnstile-response": z.string() }),
+    handler: async (input) => {
+      const { "cf-turnstile-response": token, ...lead } = input
+      if (!(await verifyTurnstile(token))) {
+        throw new ActionError({ code: "FORBIDDEN", message: "Verificación anti-bot fallida." })
+      }
+
+      try {
+        const start = await leads.startPhoneVerification({ phone: lead.phone, language: "es" })
+        if (start.required) {
+          return {
+            verification_required: true as const,
+            verification_id: start.verification_id,
+            resend_available_at: start.resend_available_at,
+            code_length: start.code_length,
+          }
+        }
+        // required: false — the workspace does not verify (or the send failed): fall through.
+      } catch (err) {
+        if (isPhoneVerificationError(err, "no_whatsapp")) {
+          throw new ActionError({ code: "BAD_REQUEST", message: "Ese número no tiene WhatsApp." })
+        }
+        if (isPhoneVerificationError(err, "invalid_phone")) {
+          throw new ActionError({ code: "BAD_REQUEST", message: "Revisa el número de teléfono." })
+        }
+        if (isPhoneVerificationError(err, "too_many_codes")) {
+          throw new ActionError({
+            code: "TOO_MANY_REQUESTS",
+            message: `Espera ${err.body.retry_after ?? 30} s para pedir otro código.`,
+          })
+        }
+        if (!phoneVerificationFailsOpen(err)) throw err
+        // Network error, timeout, 5xx: fail open and submit below.
+        console.error("[phone-verification] start failed, submitting unverified", err)
+      }
+
+      await leads.submit(payload(lead))
+      return { verification_required: false as const }
+    },
+  }),
+
+  // Step 2 — the code the visitor typed, plus the same contact fields.
+  confirmLead: defineAction({
+    accept: "form",
+    input: z.object({ ...contact, verification_id: z.string(), code: z.string() }),
+    handler: async ({ verification_id, code, ...lead }) => {
+      try {
+        const check = await leads.checkPhoneVerification(verification_id, code)
+        await leads.submit({ ...payload(lead), phone_verification_id: check.verification_id })
+        return { ok: true as const }
+      } catch (err) {
+        if (isPhoneVerificationError(err, "invalid_code")) {
+          throw new ActionError({
+            code: "BAD_REQUEST",
+            message: `Código incorrecto. Te quedan ${err.body.attempts_left ?? 0} intentos.`,
+          })
+        }
+        if (isPhoneVerificationError(err, "expired") || isPhoneVerificationError(err, "too_many_attempts")) {
+          throw new ActionError({ code: "BAD_REQUEST", message: "El código ya no es válido. Pide uno nuevo." })
+        }
+        throw err
+      }
+    },
+  }),
+}
+
+// Your own Cloudflare Turnstile server-side check (siteverify).
+declare function verifyTurnstile(token: string): Promise<boolean>
+```
+
+On the page: call `requestLead`; if it answers `verification_required`, show a
+code input of `code_length` digits, keep `verification_id`, enable «Reenviar
+código» from `resend_available_at` (it calls `requestLead` again with a fresh
+Turnstile token and replaces the id — or, without a fresh token, an action that
+calls `startPhoneVerification({ phone, resendOf: verification_id })`), and send
+the code with `confirmLead`. Either path that ends in a
+submitted lead fires the conversion event and the redirect, as before.
+
+In local development (`LEAD_PHONE_VERIFICATION_DEV_SINK=true` on the platform's
+local stack) the code is not sent to WhatsApp but to Mailpit, so the whole flow
+can be walked against `baseUrl` pointed at the local functions.
+
 ## Catalog (server)
 
 ```ts
@@ -154,8 +334,9 @@ records.
 
 ## Errors
 
-Every non-2xx response throws a `LinkerestateError` carrying `status` and the
-parsed `body` — except `peek()`, which returns `null` instead so a rotation
+Every non-2xx response throws a `LinkerestateError` carrying `status`, the
+parsed `body` and, when the body names one, a machine-readable `code` (since
+1.6.0; e.g. `"invalid_code"`) — except `peek()`, which returns `null` instead so a rotation
 outage can never break a page.
 
 ```ts
