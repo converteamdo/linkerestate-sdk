@@ -132,6 +132,12 @@ Every refusal is a `LinkerestateError` whose `code` names it.
 | `too_many_attempts` | 429 | check | 5 wrong codes — start again |
 | `not_found` | 404 | check | unknown id, or another campaign's |
 | `phone_verification_invalid` | 422 | submit | the id is not a verified, unconsumed verification of this phone from the last 30 minutes |
+| `code_not_sent` | 422 | start | WhatsApp could not deliver the code and the workspace does not accept unverified leads — do not submit; let the visitor try again |
+
+Whether a code WhatsApp could not deliver lets the form through is the **workspace's** choice
+(Settings › Campañas › Verificación de WhatsApp, «Enviar el formulario si el código no llega», on
+by default). On, `startPhoneVerification` answers `{ required: false, reason: "send_failed" }` and
+the site submits as usual; off, it throws `code_not_sent`.
 
 `phone_verification_id` must be submitted with the **same phone** that was
 verified (digits compared), and it is consumed by the lead it is submitted with.

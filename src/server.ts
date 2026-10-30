@@ -104,6 +104,7 @@ export interface PhoneVerificationCheck {
  * | `too_many_attempts` | 429 | check | 5 wrong codes — start again |
  * | `not_found` | 404 | check | unknown id, or another campaign's |
  * | `phone_verification_invalid` | 422 | submit | the id is not a usable verification of this phone |
+ * | `code_not_sent` | 422 | start | WhatsApp could not deliver the code and the workspace chose not to accept unverified leads — do not submit; offer to try again |
  */
 export type PhoneVerificationErrorCode =
   | "no_whatsapp"
@@ -114,6 +115,7 @@ export type PhoneVerificationErrorCode =
   | "too_many_attempts"
   | "not_found"
   | "phone_verification_invalid"
+  | "code_not_sent"
 
 /** The parsed body of a phone-verification refusal. */
 export interface PhoneVerificationErrorBody {
@@ -139,6 +141,7 @@ const PHONE_VERIFICATION_CODES: ReadonlySet<string> = new Set<PhoneVerificationE
   "too_many_attempts",
   "not_found",
   "phone_verification_invalid",
+  "code_not_sent",
 ])
 
 /**
