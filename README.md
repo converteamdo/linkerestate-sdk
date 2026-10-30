@@ -269,6 +269,68 @@ In local development (`LEAD_PHONE_VERIFICATION_DEV_SINK=true` on the platform's
 local stack) the code is not sent to WhatsApp but to Mailpit, so the whole flow
 can be walked against `baseUrl` pointed at the local functions.
 
+## Bot challenge (Cloudflare Turnstile)
+
+Since 1.7.0 the SDK carries the whole challenge: it loads Cloudflare's script, renders the
+widget invisible and shows it only when Cloudflare needs the visitor to act. Your site supplies
+the two keys and its own styling.
+
+```ts
+// Browser — the form
+import { mountChallenge } from "@linkerestate/sdk/client"
+
+const challenge = mountChallenge(form.querySelector("[data-challenge-slot]"), {
+  siteKey: import.meta.env.PUBLIC_TURNSTILE_SITE_KEY,   // public
+  theme: "light",
+})
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault()
+  const token = (await challenge.waitForToken()) ?? ""
+  // send `token` with the form; call challenge.reset() if the server refused it
+})
+```
+
+```ts
+// Server — wherever the form lands
+import { verifyChallenge } from "@linkerestate/sdk/server"
+
+const { success, errorCodes } = await verifyChallenge(token, {
+  secret: process.env.TURNSTILE_SECRET_KEY!,           // never expose this
+  remoteIp: clientAddress,
+})
+if (!success) console.warn("challenge refused:", errorCodes)
+```
+
+A token is single-use: take a fresh one for every submission (`takeToken()` returns it and
+starts a new challenge). `verifyChallenge` never throws — an empty token, a refusal or an
+unreachable Cloudflare all answer `success: false`.
+
+### Placement and styling
+
+- `placement: "inline"` (default) sits in its container and leaves the layout entirely while it
+  renders nothing — no reserved height, no margin, no gap.
+- `placement: "floating"` is a card fixed at the bottom centre of the screen. Pass `null` as the
+  container and the SDK creates it. Use it for buttons, or for a form with no room for a
+  challenge (a horizontal hero bar).
+
+The container carries `data-challenge="inline|floating"`, plus `data-challenge-shown` while the
+widget shows something and `data-challenge-done` once a solved challenge has collapsed. Style
+those with your own tokens; the SDK's few cosmetic defaults have zero specificity, so any rule of
+yours wins.
+
+### WhatsApp / phone clicks
+
+`attachCommitProxy` is the challenged form of `attachCommitHandlers()`: each click posts
+`{ type, token }` to your own route, which verifies the token before committing the turn.
+
+```ts
+import { attachCommitProxy, mountChallenge } from "@linkerestate/sdk/client"
+
+const watel = mountChallenge(null, { siteKey, placement: "floating", action: "watel" })
+attachCommitProxy({ endpoint: "/api/rr-commit", challenge: watel })
+```
+
 ## Catalog (server)
 
 ```ts

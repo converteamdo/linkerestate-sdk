@@ -1,8 +1,15 @@
 /** Agent rotation for WhatsApp and phone CTAs. Runs in the browser. */
 
+import type { Challenge } from "./challenge.js"
 import { normalizeBaseUrl, request, type BaseConfig } from "./core.js"
 
 export { LinkerestateError } from "./core.js"
+export {
+  mountChallenge,
+  type Challenge,
+  type ChallengeOptions,
+  type ChallengePlacement,
+} from "./challenge.js"
 
 export interface RoundRobinConfig extends BaseConfig {
   /** Campaign UUID the rotation belongs to. */
@@ -24,7 +31,7 @@ export type CtaChannel = "whatsapp" | "tel"
 /** Elements the commit handler binds to. */
 const SELECTORS: Record<CtaChannel, string> = {
   whatsapp: '[id^="wa-btn"], [data-rr-link="whatsapp"]',
-  tel: '[id^="tel-btn"], [data-rr-link="tel"]',
+  tel: '[id^="tel-btn"], [id^="phone-btn"], [data-rr-link="tel"]',
 }
 
 export interface LeadFormAgent {
@@ -116,4 +123,59 @@ export function createRoundRobinClient(config: RoundRobinConfig): RoundRobinClie
       return () => cleanups.forEach((fn) => fn())
     },
   }
+}
+
+export interface CommitProxyOptions {
+  /**
+   * Your own server route that verifies the challenge token and then commits the turn — e.g.
+   * `/api/rr-commit`. It receives `POST { type: "whatsapp" | "tel", token }` as JSON.
+   */
+  endpoint: string
+  /** The challenge whose token goes with each click; see `mountChallenge`. */
+  challenge: Challenge
+  /** Where to look for the CTAs. Default `document`. */
+  root?: ParentNode
+}
+
+/**
+ * The challenged variant of `attachCommitHandlers()`: each WhatsApp / phone click posts the
+ * challenge's token to YOUR route, which verifies it (`verifyChallenge` from
+ * `@linkerestate/sdk/server`) before committing the turn — so a bot clicking the buttons cannot
+ * spin the rotation. Same selectors, same fire-and-forget beacon, never blocks the navigation.
+ * Returns a cleanup function; each element is bound once.
+ */
+export function attachCommitProxy(options: CommitProxyOptions): () => void {
+  const root = options.root ?? document
+  const cleanups: Array<() => void> = []
+  for (const channel of Object.keys(SELECTORS) as CtaChannel[]) {
+    for (const el of Array.from(root.querySelectorAll<HTMLElement>(SELECTORS[channel]))) {
+      if (el.dataset.rrCommitAttached === "true") continue
+      el.dataset.rrCommitAttached = "true"
+      const onClick = async () => {
+        // A click right after the previous one finds the next token still on its way: wait for
+        // it briefly — the CTA opens WhatsApp or the dialer, so this page is still alive.
+        const token =
+          options.challenge.takeToken() ??
+          ((await options.challenge.waitForToken(5000)) && options.challenge.takeToken())
+        const body = JSON.stringify({ type: channel, token: token ?? "" })
+        const sent =
+          typeof navigator.sendBeacon === "function" &&
+          navigator.sendBeacon(options.endpoint, new Blob([body], { type: "application/json" }))
+        if (!sent) {
+          void fetch(options.endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+            keepalive: true,
+          }).catch(() => {})
+        }
+      }
+      el.addEventListener("click", onClick)
+      cleanups.push(() => {
+        el.removeEventListener("click", onClick)
+        delete el.dataset.rrCommitAttached
+      })
+    }
+  }
+  return () => cleanups.forEach((fn) => fn())
 }

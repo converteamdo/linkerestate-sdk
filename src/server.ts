@@ -262,3 +262,54 @@ export function createLeadsClient(config: LeadsConfig): LeadsClient {
     },
   }
 }
+
+const SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+export interface ChallengeVerification {
+  /** True only when Cloudflare confirmed the token. */
+  success: boolean
+  /**
+   * Cloudflare's `error-codes` (`"timeout-or-duplicate"`, `"invalid-input-response"`, …), or
+   * `"missing-input-response"` for an empty token and `"siteverify-unreachable"` when Cloudflare
+   * did not answer. For your logs — never shown to the visitor.
+   */
+  errorCodes: string[]
+}
+
+export interface VerifyChallengeOptions {
+  /** The Turnstile SECRET key. Server-only — never ship it to a client bundle. */
+  secret: string
+  /** The visitor's IP, when your framework exposes it. Optional; Cloudflare checks it against the token. */
+  remoteIp?: string | null
+  /** Default 6000. */
+  timeoutMs?: number
+}
+
+/**
+ * Verifies a Turnstile token from `mountChallenge` (`@linkerestate/sdk/client`) against
+ * Cloudflare. Never throws: an empty token, a refusal, a timeout and a network failure all
+ * answer `success: false`, with the reason in `errorCodes`. A token is single-use, so a second
+ * verification of the same one fails with `timeout-or-duplicate`.
+ */
+export async function verifyChallenge(
+  token: string | null | undefined,
+  options: VerifyChallengeOptions
+): Promise<ChallengeVerification> {
+  if (!options.secret) throw new TypeError("verifyChallenge: secret is required")
+  if (!token) return { success: false, errorCodes: ["missing-input-response"] }
+
+  const body = new URLSearchParams({ secret: options.secret, response: token })
+  if (options.remoteIp) body.set("remoteip", options.remoteIp)
+  try {
+    const res = await fetch(SITEVERIFY_URL, {
+      method: "POST",
+      body,
+      signal: AbortSignal.timeout(options.timeoutMs ?? 6000),
+    })
+    if (!res.ok) return { success: false, errorCodes: [`siteverify-http-${res.status}`] }
+    const data = (await res.json()) as { success?: boolean; "error-codes"?: string[] }
+    return { success: data.success === true, errorCodes: data["error-codes"] ?? [] }
+  } catch {
+    return { success: false, errorCodes: ["siteverify-unreachable"] }
+  }
+}
